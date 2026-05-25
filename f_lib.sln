@@ -1,25 +1,567 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.10.35013.160
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "f_lib", "f_lib\f_lib.csproj", "{CEA45F35-339F-4EC4-B399-85C3B9A9F02F}"
-EndProject
-Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{CEA45F35-339F-4EC4-B399-85C3B9A9F02F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CEA45F35-339F-4EC4-B399-85C3B9A9F02F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CEA45F35-339F-4EC4-B399-85C3B9A9F02F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CEA45F35-339F-4EC4-B399-85C3B9A9F02F}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {AEEAE087-C6CA-408D-86B6-385B04A4E5AE}
-	EndGlobalSection
-EndGlobal
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.NetworkInformation;
+
+namespace final_lib
+{
+    internal class Program
+    {
+        static Queue<string> requestQueue = new Queue<string>();
+
+        static void Main(string[] args)
+        {
+            // create files if don't exist
+            if (!File.Exists("requests.txt"))
+            {
+                File.Create("requests.txt").Close(); //for the program to not keep it open when not using it
+            }
+
+            if (!File.Exists("books.txt"))
+            {
+                File.Create("books.txt").Close();
+            }
+
+            if (!File.Exists("users.txt"))
+            {
+                File.Create("users.txt").Close();
+            }
+
+            // load existing requests into queue
+            string[] lines = File.ReadAllLines("requests.txt");
+            foreach (string line in lines)
+            {
+                //check if the line is not empty and have a comma
+                if (!string.IsNullOrWhiteSpace(line) && line.Contains(","))
+                {
+                    // add to queue
+                    requestQueue.Enqueue(line);
+                }
+            }
+
+            Mainmenu();
+        }
+
+        static void Mainmenu()
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine("║            LIBRARY SYSTEM            ║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.ResetColor();
+
+                Console.WriteLine("[1] Login" +
+                    "\n[2] Register" +
+                    "\n[3] Exit");
+                Console.Write("\nEnter number of choice: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        Login();
+                        break;
+                    case "2":
+                        Register();
+                        break;
+                    case "3":
+                        Console.Clear();
+                        Console.ForegroundColor = ConsoleColor.DarkGray;
+                        Console.WriteLine("Exiting...");
+                        Console.ResetColor();
+                        return;
+                    default:
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Invalid choice.");
+                        Console.ResetColor();
+                        Console.ReadKey();
+                        break;
+                }
+            }
+        }
+
+        static void Login()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║                 LOGIN                ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            Console.WriteLine("Enter credentials (case sensitive):");
+            Console.Write("Username: ");
+            string user = Console.ReadLine();
+            Console.Write("Role (student/librarian): ");
+            string role = Console.ReadLine().ToLower();
+            Console.Write("Password: ");
+            string pass = Console.ReadLine();
+
+            // read all registered accounts from the  file
+            string[] lines = File.ReadAllLines("users.txt");
+
+            foreach (string line in lines)
+            {
+                // skip empty lines or data
+                if (string.IsNullOrWhiteSpace(line) || !line.Contains(","))
+                {
+                    continue;
+                }
+
+                string[] p = line.Split(',');
+
+                // compare input to stored credentials
+                if (p.Length >= 3 && p[0] == user && p[1] == role && p[2] == pass)
+                {
+
+                    switch (role)
+                    {
+                        case "student":
+                            Student(user);
+                            return;
+                        case "librarian":
+                            Librarian(user);
+                            return;
+                    }
+                }
+            }
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Invalid input.");
+            Console.ResetColor();
+            Console.ReadKey();
+        }
+
+        static void Register()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║               REGISTER               ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            Console.Write("New Username: ");
+            string user = Console.ReadLine();
+            Console.Write("New Password: ");
+            string pass = Console.ReadLine();
+
+            // check if inputs are not blank
+            if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+            {
+                File.AppendAllText("users.txt", $"{user},student,{pass}\n");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Registered successfully!");
+                Console.ResetColor();
+            }
+            Console.ReadKey();
+        }
+
+        static void Librarian(string username)
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine("║           LIBRARIAN PANEL            ║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.ResetColor();
+
+                Console.WriteLine("[1] Add Book" +
+                    "\n[2] View All Books" +
+                    "\n[3] Manage Requests" +
+                    "\n[4] Logout");
+
+                Console.Write("\nEnter number of choice: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        AddBook();
+                        break;
+                    case "2":
+                        Viewbooks();
+                        break;
+                    case "3":
+                        Managerequests();
+                        break;
+                    case "4":
+                        return;
+                }
+            }
+        }
+
+        static void Student(string username)
+        {
+
+            while (true)
+            {
+                Console.Clear();
+                string welcomeMsg = $"WELCOME, {username.ToUpper()}";
+                string centeredMsg = welcomeMsg.PadLeft((38 + welcomeMsg.Length) / 2).PadRight(38);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine($"║{centeredMsg}║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.ResetColor();
+
+                Console.WriteLine("[1] View Books" +
+                    "\n[2] Borrow Book" +
+                    "\n[3] My Requests" +
+                    "\n[4] Return Book" +
+                    "\n[5] Logout");
+                Console.Write("\nEnter number of choice: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        Viewbooks();
+                        break;
+                    case "2":
+                        Borrowbook(username);
+                        break;
+                    case "3":
+                        ListRequest(username);
+                        break;
+                    case "4":
+                        BookReturn(username);
+                        break;
+                    case "5":
+                        return;
+                }
+            }
+        }
+
+        static void Viewbooks()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║             BOOK CATALOG             ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            string[] lines = File.ReadAllLines("books.txt");
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string[] p = lines[i].Split(',');
+                //book title, author, and availability status
+                Console.WriteLine($"{i + 1}. {p[0]} by {p[1]} [{p[2]}]");
+            }
+
+            Console.WriteLine("\nPress any key to return.");
+            Console.ReadKey();
+        }
+
+        static void AddBook()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║             ADD NEW BOOK             ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            Console.Write("Title: ");
+            string t = Console.ReadLine();
+            Console.Write("Author: ");
+            string a = Console.ReadLine();
+
+            if (!string.IsNullOrWhiteSpace(t) && !string.IsNullOrWhiteSpace(a))
+            {
+                // save new book to file to available status
+                File.AppendAllText("books.txt", $"{t},{a},Available\n");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Added!");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Invalid input.");
+                Console.ResetColor();
+            }
+            Console.ReadKey();
+        }
+        static void Borrowbook(string user)
+        {
+            bool continueborrowing = true;
+
+            while (continueborrowing)
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine("║        SELECT A BOOK TO BORROW       ║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.ResetColor();
+
+                // load current book list
+                string[] books = File.ReadAllLines("books.txt");
+
+                //go through each book
+                for (int i = 0; i < books.Length; i++)
+                {
+                    // skip if line is empty
+                    if (string.IsNullOrWhiteSpace(books[i]))
+                    {
+                        continue;
+                    }
+
+                    //split title, author, status
+                    string[] p = books[i].Split(',');
+                    Console.WriteLine($" [{i + 1}] {p[0]} ({p[2]})");
+                }
+
+                Console.Write("\nEnter book number (or '0' to go back): ");
+                string input = Console.ReadLine();
+
+                // if user wants to exit borrow
+                if (input == "0")
+                {
+                    break;
+                }
+
+                //  if the user input is a valid number and exists in the list
+                if (int.TryParse(input, out int choice) && choice > 0 && choice <= books.Length)
+                {
+                    string[] selectedBook = books[choice - 1].Split(',');
+                    //  allow borrowing if the book is not already borrowed
+                    if (selectedBook[2] == "Available")
+                    {
+                        // create request
+                        string req = $"{user},{selectedBook[0]},Pending";
+                        // add to queue and file
+                        requestQueue.Enqueue(req);
+                        //  save to file
+                        File.AppendAllText("requests.txt", req + Environment.NewLine); // next line
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"\n Success: Request for '{selectedBook[0]}' sent!");
+                        Console.ResetColor();
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("\n Error: This book is currently unavailable.");
+                        Console.ResetColor();
+                    }
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("\n Invalid selection.");
+                    Console.ResetColor();
+                }
+
+                // ask the user if they want to borrow again
+                Console.Write("\nWould you like to borrow another book? (y/n): ");
+                string again = Console.ReadLine().ToLower();
+
+                if (again != "y")
+                {
+                    continueborrowing = false;
+                }
+            }
+        }
+
+        static void ListRequest(string user)
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║            YOUR REQUESTS             ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            // iterate through every request stored
+            foreach (var r in requestQueue)
+            {
+                // check if the record starts with the student name who is loggedin
+                if (r.StartsWith(user))
+                {
+                    Console.WriteLine(r);
+                }
+            }
+
+            Console.WriteLine("\nPress any key to return.");
+            Console.ReadKey();
+        }
+
+        static void BookReturn(string user)
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════════════╗");
+            Console.WriteLine("║             RETURN BOOK              ║");
+            Console.WriteLine("╚══════════════════════════════════════╝");
+            Console.ResetColor();
+
+            // load all requests into a list
+            List<string> allReqs = requestQueue.ToList();
+            // look records belonging to this student that are approved
+            List<int> approvedIdx = new List<int>();
+
+            //go through all requests
+            for (int i = 0; i < allReqs.Count; i++)
+            {
+                string[] p = allReqs[i].Split(',');
+                // if the record belongs to the user and is approved
+                if (p[0] == user && p[2] == "Approved")
+                {
+                    // display the book title and add the index to the approved list
+                    Console.WriteLine($"{approvedIdx.Count + 1}. {p[1]}");
+                    approvedIdx.Add(i);
+                }
+            }
+
+            if (approvedIdx.Count == 0)
+            {
+                Console.WriteLine("Nothing to return.");
+                Console.ReadKey();
+                return;
+            }
+
+            // checks if the user's input is a valid number and exists in the list
+            Console.Write("\nSelect book number: ");
+            if (int.TryParse(Console.ReadLine(), out int choice) && choice <= approvedIdx.Count)
+            {
+                // details of chosen book
+                int indexInQueue = approvedIdx[choice - 1];
+                string bookTitle = allReqs[indexInQueue].Split(',')[1];
+
+                // remove borrow record
+                allReqs.RemoveAt(indexInQueue);
+
+                // search books.txt to make it available again
+                string[] books = File.ReadAllLines("books.txt");
+                for (int i = 0; i < books.Length; i++)
+                {
+                    if (books[i].StartsWith(bookTitle + ","))
+                    {
+                        string[] b = books[i].Split(',');
+                        books[i] = $"{b[0]},{b[1]},Available";
+                        break;
+                    }
+                }
+
+                // save to files and queue
+                File.WriteAllLines("books.txt", books);
+                File.WriteAllLines("requests.txt", allReqs);
+                requestQueue = new Queue<string>(allReqs); //update queue using new request list
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("\nBook returned and available again!");
+                Console.ResetColor();
+            }
+            Console.WriteLine("\nPress any key to return.");
+            Console.ReadKey();
+        }
+
+        static void Managerequests()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╔══════════════════════════════╗");
+            Console.WriteLine("║        MANAGE REQUESTS       ║");
+            Console.WriteLine("╚══════════════════════════════╝");
+            Console.ResetColor();
+
+
+            // check if queue is empty
+            if (requestQueue.Count == 0)
+            {
+                Console.WriteLine("No requests in the queue.");
+                Console.ReadKey();
+                return;
+            }
+
+            // remove request sa front until may makita na pending
+            string currentRequest = null;
+
+            while (requestQueue.Count > 0)
+            {
+                string temp = requestQueue.Dequeue(); // remove first request
+
+                // check if request is still pending
+                if (temp.Split(',')[2] == "Pending")
+                {
+                    currentRequest = temp; //found dapat iprocess
+                    break;
+                }
+                // skip non pending (basically mga na approve or decline na)
+            }
+
+
+            // no pending request was found
+            if (currentRequest == null)
+            {
+                Console.WriteLine("No pending requests.");
+                Console.ReadKey();
+                return;
+            }
+
+            // split the request into parts
+            string[] selected = currentRequest.Split(',');
+            string studentName = selected[0];
+            string bookTitle = selected[1];
+
+            Console.WriteLine("NEXT REQUEST:");
+            Console.WriteLine($"Student: {studentName}");
+            Console.WriteLine($"Book   : {bookTitle}");
+            Console.WriteLine("-------------------------------");
+            Console.Write("A = Approve, D = Decline: ");
+            string action = Console.ReadLine().ToUpper();
+
+
+            List<string> books = File.ReadAllLines("books.txt").ToList();
+
+            if (action == "A")
+            {
+                // book status to borrowed
+                for (int i = 0; i < books.Count; i++)
+                {
+                    string[] b = books[i].Split(',');
+
+                    if (b[0] == bookTitle)
+                    {
+                        books[i] = $"{b[0]},{b[1]},Borrowed";
+                        break;
+                    }
+                }
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\nSUCCESS: '{bookTitle}' approved for {studentName}.");
+                Console.ResetColor();
+            }
+            else if (action == "D")
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"\nNOTICE: '{bookTitle}' request declined.");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.WriteLine("Invalid action.");
+                Console.ReadKey();
+                return;
+            }
+
+            // save updated books
+            File.WriteAllLines("books.txt", books);
+
+
+            // rebuild requests file from the CURRENT queue
+            File.WriteAllLines("requests.txt", requestQueue);
+
+            Console.WriteLine("\nPress any key to return...");
+            Console.ReadKey();
+        }
+    }
+}
